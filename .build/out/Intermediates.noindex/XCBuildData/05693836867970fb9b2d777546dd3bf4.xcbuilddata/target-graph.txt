@@ -1,2 +1,0 @@
-Target dependency graph (1 target)
-Target 'NotchAir-product' in project 'NotchAir' (no dependencies)
