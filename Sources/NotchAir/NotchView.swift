@@ -59,8 +59,26 @@ struct MarqueeTextView: View {
     }
 }
 
+struct AirDropBeamView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.03)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let w1 = t.truncatingRemainder(dividingBy: 1.4) / 1.4
+            let w2 = (t + 0.7).truncatingRemainder(dividingBy: 1.4) / 1.4
+            let glide = sin(t * 4.0) * 3.0
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.6 * (1 - w1)), lineWidth: 1.2).frame(width: 22, height: 22).scaleEffect(1 + w1 * 1.1)
+                Circle().stroke(Color.white.opacity(0.6 * (1 - w2)), lineWidth: 1.2).frame(width: 22, height: 22).scaleEffect(1 + w2 * 1.1)
+                Image(systemName: "paperplane.fill").font(.caption).foregroundStyle(.white).offset(x: glide, y: -glide * 0.5)
+            }
+            .frame(width: 40, height: 40)
+        }
+    }
+}
+
 struct NotchView: View {
     @ObservedObject var state: AppState
+    @ObservedObject var peerDiscovery: PeerDiscoveryManager
     let onPlayPause: () -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
@@ -192,25 +210,13 @@ struct NotchView: View {
 
             case .transferring(let file, let progress, let speed):
                 HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.18), lineWidth: 4)
-                        Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                        Text("\(Int(progress * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 40, height: 40)
-
+                    AirDropBeamView()
                     VStack(alignment: .leading, spacing: 2) {
                         Text(file)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                        Text(String(format: "%.1f MB/s", speed))
+                        Text(speed > 0 ? String(format: "%.1f MB/s • %d%%", speed, Int(progress * 100)) : "\(Int(progress * 100))%")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -347,7 +353,7 @@ struct NotchView: View {
                         } else {
                             HStack(spacing: 10) {
                                 if state.shelfFiles.isEmpty {
-                                    Text("Drop files here to share with Android")
+                                    Text("Drop files here to share with Android or Mac")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, minHeight: 46)
@@ -372,6 +378,26 @@ struct NotchView: View {
                                         }
                                     }
                                     .frame(height: 54)
+                                }
+                            }
+
+                            if !peerDiscovery.peers.isEmpty, let firstFile = state.shelfFiles.first {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(peerDiscovery.peers) { peer in
+                                            Button {
+                                                peerDiscovery.sendFile(fileURL: firstFile.url, to: peer, appState: state)
+                                            } label: {
+                                                Label(peer.name, systemImage: "laptopcomputer")
+                                                    .font(.caption2.weight(.semibold))
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 6)
+                                                    .background(Color.white.opacity(0.14), in: Capsule())
+                                                    .foregroundStyle(.white)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
                                 }
                             }
 
@@ -441,7 +467,7 @@ struct NotchView: View {
             }
             if state.showCustomize { return CGSize(width: 360, height: 155) }
             if state.showQR { return CGSize(width: 360, height: 175) }
-            return CGSize(width: 360, height: 165)
+            return CGSize(width: 360, height: peerDiscovery.peers.isEmpty ? 165 : 200)
         }
     }
 
@@ -475,49 +501,3 @@ struct NotchView: View {
         return NSImage(cgImage: cgImage, size: NSSize(width: 120, height: 120))
     }
 }
-
-TimelineView(.animation(minimumInterval: 0.04, paused: !track.isPlaying)) { timeline in
-    let t = timeline.date.timeIntervalSinceReferenceDate
-    let pulse = track.isPlaying ? (1.0 + 0.08 * sin(t * 2.6)) : 1.0
-    ZStack {
-        if let art = state.artworkImage {
-            Image(nsImage: art)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 58, height: 58)
-                .blur(radius: 16)
-                .scaleEffect(pulse)
-                .opacity(track.isPlaying ? 0.55 : 0.25)
-            Image(nsImage: art)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .scaleEffect(track.isPlaying ? (1.0 + 0.02 * sin(t * 2.6)) : 1.0)
-                .matchedGeometryEffect(id: "albumArt", in: notchSpace)
-        }
-    }
-}
-// On notchContainer:
-.animation(.spring(response: 0.36, dampingFraction: 0.65, blendDuration: 0.12), value: state.notchMode)
-.animation(.spring(response: 0.32, dampingFraction: 0.72), value: state.nowPlaying)
-
-// On your time Text(formatTime(...)):
-Text(formatTime(state.currentPlaybackTime))
-    .font(.system(size: 10).monospacedDigit())
-    .foregroundStyle(.white.opacity(0.55))
-    .contentTransition(.numericText())
-    .animation(.linear(duration: 0.2), value: Int(state.currentPlaybackTime))
-TimelineView(.animation(minimumInterval: 0.03)) { timeline in
-    let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
-    ZStack {
-        Circle()
-            .stroke(Color.white.opacity(1.0 - phase), lineWidth: 1.5)
-            .frame(width: 24, height: 24)
-            .scaleEffect(1.0 + phase * 0.9)
-        Image(systemName: "checkmark.circle.fill")
-            .font(.title3)
-            .foregroundStyle(.white)
-    }
-}
-

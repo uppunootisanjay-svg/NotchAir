@@ -140,7 +140,6 @@ final class AppState: ObservableObject {
             shelfFiles.append(ShelfFile(url: url))
         }
         latestPortalPush = PortalPushPayload(id: UUID().uuidString, fileName: url.lastPathComponent)
-        portalSentFileName = url.lastPathComponent
         notchMode = .expandedShelf
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             if self?.portalSentFileName == url.lastPathComponent {

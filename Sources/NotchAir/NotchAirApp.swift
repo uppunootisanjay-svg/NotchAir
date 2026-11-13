@@ -2,8 +2,11 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
+    let peerDiscovery = PeerDiscoveryManager()
     var notchController: NotchPanelController?
     var portalController: PortalEdgeController?
+    var portalReceiveController: PortalReceiveOverlayController?
+    var downloadsWatcher: DownloadsWatcher?
     var ambientController: AmbientLockOverlayController?
     var transferServer: LocalTransferServer?
     var nowPlayingManager: NowPlayingManager?
@@ -13,9 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let player = NowPlayingManager(appState: appState)
         player.start()
         nowPlayingManager = player
+        peerDiscovery.start()
 
-        notchController = NotchPanelController(appState: appState, nowPlayingManager: player)
+        notchController = NotchPanelController(appState: appState, nowPlayingManager: player, peerDiscovery: peerDiscovery)
         portalController = PortalEdgeController(appState: appState)
+        portalReceiveController = PortalReceiveOverlayController(appState: appState)
+        let watcher = DownloadsWatcher()
+        watcher.start(appState: appState)
+        downloadsWatcher = watcher
         ambientController = AmbientLockOverlayController(appState: appState, nowPlayingManager: player)
         transferServer = LocalTransferServer(appState: appState)
         transferServer?.start()
@@ -42,19 +50,10 @@ struct NotchAirApp: App {
                 openWindow(id: "settings")
             }
             Divider()
-            Button("Simulate Incoming File") {
-                delegate.appState.notchMode = .incomingRequest(
-                    deviceName: "Pixel 9",
-                    fileName: "Invoice_2026.pdf",
-                    fileSize: "2.4 MB"
-                )
-            }
-            Divider()
             Button("Quit NotchAir") {
                 NSApplication.shared.terminate(nil)
             }
         }
-
         Window("NotchAir Settings", id: "settings") {
             SettingsView(state: delegate.appState)
         }

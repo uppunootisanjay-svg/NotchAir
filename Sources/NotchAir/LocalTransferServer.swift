@@ -156,6 +156,10 @@ final class LocalTransferServer {
                         at: 0
                     )
                     self.appState.notchMode = .idle
+                    self.appState.portalSentFileName = fileName
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                        if self.appState.portalSentFileName == fileName { self.appState.portalSentFileName = nil }
+                    }
                 }
                 self.sendResponse(connection: connection, status: "200 OK", contentType: "text/plain", body: Data("Saved".utf8))
                 return
