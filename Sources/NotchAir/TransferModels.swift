@@ -57,6 +57,45 @@ enum PortalEffect: String, CaseIterable, Identifiable {
     }
 }
 
+enum LockClockStyle: String, CaseIterable, Identifiable {
+    case classic = "Classic"
+    case rounded = "Rounded"
+    case stencil = "Stencil"
+    case serif = "Serif"
+    case tall = "Tall"
+    case glassOutline = "Liquid Glass"
+    var id: String { rawValue }
+
+
+    func font(size: CGFloat = 88, weightValue: Double) -> Font {
+        let w: Font.Weight = {
+            switch weightValue {
+            case ..<0.2: return .ultraLight
+            case ..<0.4: return .light
+            case ..<0.55: return .regular
+            case ..<0.7: return .medium
+            case ..<0.85: return .bold
+            default: return .heavy
+            }
+        }()
+        switch self {
+        case .classic: return .system(size: size, weight: w, design: .default)
+        case .rounded, .stencil, .glassOutline: return .system(size: size, weight: w, design: .rounded)
+        case .serif: return .system(size: size, weight: w, design: .serif)
+        case .tall: return .system(size: size, weight: w, design: .monospaced)
+        }
+    }
+}
+
+
+enum LyricsDisplayStyle: String, CaseIterable, Identifiable {
+    case glow = "Glow"
+    case blur = "Focus Blur"
+    case minimal = "Minimal"
+    var id: String { rawValue }
+}
+
+
 struct NowPlayingInfo: Equatable {
     var title: String
     var artist: String
@@ -124,6 +163,11 @@ final class AppState: ObservableObject {
     @Published var syncedLyrics: [LyricLine] = []
     @Published var currentPlaybackTime: Double = 0
     @Published var showLockLyrics: Bool = false
+    @Published var lockClockStyle: LockClockStyle = .stencil
+    @Published var clockWeight: Double = 0.72
+    @Published var liquidGlassClockEnabled: Bool = true
+    @Published var lyricsDisplayStyle: LyricsDisplayStyle = .glow
+    @Published var lyricsCentered: Bool = false
 
     var pendingDecision: ((Bool) -> Void)?
 

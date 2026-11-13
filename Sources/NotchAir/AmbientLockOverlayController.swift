@@ -1,15 +1,18 @@
 import AppKit
 import SwiftUI
 
+
 final class AmbientLockOverlayController {
     private var window: NSWindow?
     private let appState: AppState
     private let nowPlayingManager: NowPlayingManager
 
+
     init(appState: AppState, nowPlayingManager: NowPlayingManager) {
         self.appState = appState
         self.nowPlayingManager = nowPlayingManager
     }
+
 
     func toggle() {
         if let window, window.isVisible {
@@ -18,6 +21,7 @@ final class AmbientLockOverlayController {
         }
         show()
     }
+
 
     func show() {
         guard let screen = NSScreen.main else { return }
@@ -45,12 +49,69 @@ final class AmbientLockOverlayController {
     }
 }
 
+
+struct StencilClockText: View {
+    let style: LockClockStyle
+    let weight: Double
+    let isLiquid: Bool
+
+
+    var body: some View {
+        let base = Text(Date.now, format: .dateTime.hour().minute())
+            .font(style.font(size: 92, weightValue: weight))
+
+
+        let styled = Group {
+            if isLiquid || style == .glassOutline {
+                ZStack {
+                    base.foregroundStyle(.white.opacity(style == .glassOutline ? 0.14 : 0.24))
+                    base.foregroundStyle(
+                        LinearGradient(
+                            colors: [.white.opacity(0.95), .white.opacity(0.32), .white.opacity(0.82)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .blur(radius: style == .glassOutline ? 0.6 : 0.25)
+                }
+                .shadow(color: .white.opacity(0.4), radius: 2, y: -1)
+                .shadow(color: .black.opacity(0.38), radius: 14, y: 6)
+            } else {
+                base.foregroundStyle(.white.opacity(0.92))
+            }
+        }
+
+
+        if style == .stencil {
+            styled
+                .overlay(
+                    GeometryReader { geo in
+                        ZStack {
+                            Rectangle().frame(height: 3.5).offset(y: -geo.size.height * 0.16)
+                            Rectangle().frame(height: 3.5).offset(y: geo.size.height * 0.16)
+                            HStack(spacing: geo.size.width * 0.19) {
+                                ForEach(0..<4, id: \.self) { _ in Rectangle().frame(width: 3.2) }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .blendMode(.destinationOut)
+                    }
+                )
+                .compositingGroup()
+        } else {
+            styled
+        }
+    }
+}
+
+
 struct AmbientLockView: View {
     @ObservedObject var state: AppState
     let onPlayPause: () -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
     let onClose: () -> Void
+
 
     private var activeLineIndex: Int {
         guard !state.syncedLyrics.isEmpty else { return -1 }
@@ -64,6 +125,7 @@ struct AmbientLockView: View {
         }
         return active
     }
+
 
     var body: some View {
         ZStack {
@@ -83,15 +145,15 @@ struct AmbientLockView: View {
                 .ignoresSafeArea()
             }
 
+
             VStack(spacing: 28) {
                 VStack(spacing: 2) {
                     Text(Date.now, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
                         .font(.title3.weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
-                    Text(Date.now, format: .dateTime.hour().minute())
-                        .font(.system(size: 84, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.92))
+                    StencilClockText(style: state.lockClockStyle, weight: state.clockWeight, isLiquid: state.liquidGlassClockEnabled)
                 }
+
 
                 if let track = state.nowPlaying {
                     HStack(alignment: .center, spacing: 48) {
@@ -121,6 +183,7 @@ struct AmbientLockView: View {
                                 }
                             }
 
+
                             VStack(spacing: 4) {
                                 Text(track.title)
                                     .font(.title3.weight(.bold))
@@ -130,18 +193,22 @@ struct AmbientLockView: View {
                                     .foregroundStyle(.white.opacity(0.7))
                             }
 
+
                             HStack(spacing: 28) {
                                 Button(action: onPrevious) {
                                     Image(systemName: "backward.fill").font(.title2)
                                 }.buttonStyle(.plain).foregroundStyle(.white)
 
+
                                 Button(action: onPlayPause) {
                                     Image(systemName: track.isPlaying ? "pause.fill" : "play.fill").font(.largeTitle)
                                 }.buttonStyle(.plain).foregroundStyle(.white)
 
+
                                 Button(action: onNext) {
                                     Image(systemName: "forward.fill").font(.title2)
                                 }.buttonStyle(.plain).foregroundStyle(.white)
+
 
                                 Button {
                                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -156,7 +223,8 @@ struct AmbientLockView: View {
                             }
                         }
                         .padding(24)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .liquidGlass(cornerRadius: 28)
+
 
                         if state.showLockLyrics {
                             if state.syncedLyrics.isEmpty {
@@ -168,15 +236,24 @@ struct AmbientLockView: View {
                             } else {
                                 ScrollViewReader { proxy in
                                     ScrollView(showsIndicators: false) {
-                                        VStack(alignment: .leading, spacing: 14) {
+                                        VStack(alignment: state.lyricsCentered ? .center : .leading, spacing: 14) {
                                             ForEach(Array(state.syncedLyrics.enumerated()), id: \.element.id) { idx, line in
+                                                let isActive = idx == activeLineIndex
                                                 Text(line.text)
-                                                    .font(.system(size: idx == activeLineIndex ? 26 : 20, weight: idx == activeLineIndex ? .bold : .medium))
-                                                    .foregroundStyle(idx == activeLineIndex ? .white : .white.opacity(idx < activeLineIndex ? 0.35 : 0.55))
+                                                    .font(.system(
+                                                        size: isActive ? 26 : 20,
+                                                        weight: isActive ? .bold : .medium,
+                                                        design: state.lyricsDisplayStyle == .minimal ? .monospaced : .default
+                                                    ))
+                                                    .multilineTextAlignment(state.lyricsCentered ? .center : .leading)
+                                                    .foregroundStyle(isActive ? .white : .white.opacity(idx < activeLineIndex ? 0.35 : 0.55))
+                                                    .blur(radius: (state.lyricsDisplayStyle == .blur && !isActive) ? 1.8 : 0)
+                                                    .shadow(color: (state.lyricsDisplayStyle == .glow && isActive) ? .white.opacity(0.65) : .clear, radius: 10)
                                                     .id(line.id)
                                                     .animation(.easeInOut(duration: 0.25), value: activeLineIndex)
                                             }
                                         }
+                                        .frame(maxWidth: .infinity, alignment: state.lyricsCentered ? .center : .leading)
                                         .padding(.vertical, 60)
                                     }
                                     .frame(width: 420, height: 340)
@@ -199,9 +276,9 @@ struct AmbientLockView: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
+
                 Button("Dismiss") { onClose() }
-                    .buttonStyle(.bordered)
-                    .tint(.white.opacity(0.4))
+                    .padding(.horizontal, 14).padding(.vertical, 6).liquidGlass(cornerRadius: 16).buttonStyle(.plain).foregroundStyle(.white.opacity(0.85))
             }
         }
     }
